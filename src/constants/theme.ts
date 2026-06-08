@@ -22,10 +22,15 @@ export const Colors = {
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const MeridianColors = {
-  accent: '#44C760',
-  border: '#1E1E1E',
-  tabBar: '#0D0D0D',
-  card: '#141414',
+  accent:        '#44C760',  // tab indicator
+  border:        '#1E1E1E',  // internal dividers
+  tabBar:        '#0D0D0D',  // tab bar bg
+  card:          '#141414',  // base card surface
+  surface:       '#181818',  // elevated screen cards
+  surfaceBorder: '#2A2A2A',  // screen card borders
+  scoreGreen:    '#5CAD83',  // recovery / on-target (muted sage)
+  scoreAmber:    '#C49A50',  // moderate / caution (warm gold)
+  scoreRed:      '#B86262',  // caution / under target (dusty rose)
 } as const;
 
 export const Fonts = Platform.select({

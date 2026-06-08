@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
+import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,9 +15,9 @@ const REPORT = {
 } as const;
 
 const WORKOUT = {
-  type: 'Strength Training',
-  focus: 'Upper Body Push',
-  duration: '45 min',
+  type: 'Lower Body',
+  focus: 'Strength',
+  duration: '52 min',
   intensity: 'Moderate' as const,
 } as const;
 
@@ -289,7 +290,10 @@ function WorkoutCard() {
           <StatPill label="INTENSITY" value={WORKOUT.intensity} valueColor={accent} />
         </View>
 
-        <Pressable style={({ pressed }) => [w.cta, pressed && w.ctaPressed]}>
+        <Pressable
+          style={({ pressed }) => [w.cta, pressed && w.ctaPressed]}
+          onPress={() => router.push('/session')}
+        >
           <Text style={w.ctaText}>Start Session</Text>
         </Pressable>
       </View>
