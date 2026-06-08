@@ -1,12 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function HomeScreen() {
+export default function NutritionScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <Text style={styles.eyebrow}>MERIDIAN</Text>
-        <Text style={styles.heading}>Your fitness{'\n'}command centre.</Text>
+        <Text style={styles.eyebrow}>NUTRITION</Text>
+        <Text style={styles.heading}>Fuel your{'\n'}performance.</Text>
       </SafeAreaView>
     </View>
   );

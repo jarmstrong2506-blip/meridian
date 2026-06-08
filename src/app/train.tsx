@@ -1,12 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function HomeScreen() {
+export default function TrainScreen() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <Text style={styles.eyebrow}>MERIDIAN</Text>
-        <Text style={styles.heading}>Your fitness{'\n'}command centre.</Text>
+        <Text style={styles.eyebrow}>TRAIN</Text>
+        <Text style={styles.heading}>Push your{'\n'}limits.</Text>
       </SafeAreaView>
     </View>
   );
