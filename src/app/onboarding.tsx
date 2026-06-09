@@ -13,6 +13,7 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fonts, MeridianColors } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,11 +29,47 @@ type UserProfile = {
   training_days: string[];
   health_notes: string;
   wearable: 'Apple Watch' | 'Another tracker' | 'None — manual check-ins';
+  units: { height: 'cm' | 'ft'; weight: 'kg' | 'lb' };
   onboarded_at: string;
 };
 
-const TOTAL_STEPS = 11;
+const TOTAL_STEPS = 12;
 const SCREEN_WIDTH = Dimensions.get('window').width;
+
+// ─── Conversion helpers ───────────────────────────────────────────────────────
+
+function cmToFtIn(cm: string): { ft: string; in: string } {
+  const val = parseFloat(cm);
+  if (!val) return { ft: '', in: '' };
+  const totalInches = Math.round(val / 2.54);
+  const ft = Math.floor(totalInches / 12);
+  const inches = totalInches % 12;
+  return { ft: String(ft), in: String(inches) };
+}
+
+function ftInToCm(ft: string, inches: string): string {
+  const f = parseFloat(ft) || 0;
+  const i = parseFloat(inches) || 0;
+  const cm = Math.round(f * 30.48 + i * 2.54);
+  return cm > 0 ? String(cm) : '';
+}
+
+function kgToLb(kg: string): string {
+  const val = parseFloat(kg);
+  if (!val) return '';
+  return String(Math.round((val / 0.453592) * 10) / 10);
+}
+
+function lbToKg(lb: string): string {
+  const val = parseFloat(lb);
+  if (!val) return '';
+  return String(Math.round(val * 0.453592 * 10) / 10);
+}
+
+// ─── Injury acknowledgement ───────────────────────────────────────────────────
+
+const injuryAcknowledgement =
+  "Noted — thank you for telling me. When I build your training I'll work around it: easing off the movements that aggravate it, strengthening the surrounding area safely, and never pushing you through pain. Your plan adapts to you, not the other way round.";
 
 // ─── CoachQuestion ────────────────────────────────────────────────────────────
 
@@ -123,15 +160,17 @@ function NumberInputLine({
   onChangeText,
   unit,
   autoFocus,
+  noPadding,
 }: {
   value: string;
   onChangeText: (v: string) => void;
   unit?: string;
   autoFocus?: boolean;
+  noPadding?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   return (
-    <View style={nl.wrap}>
+    <View style={[nl.wrap, noPadding && nl.wrapNoPad]}>
       <View style={nl.row}>
         <TextInput
           value={value}
@@ -155,6 +194,7 @@ function NumberInputLine({
 
 const nl = StyleSheet.create({
   wrap: { paddingHorizontal: 24 },
+  wrapNoPad: { paddingHorizontal: 0 },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -176,6 +216,61 @@ const nl = StyleSheet.create({
   },
   line: { height: 1, backgroundColor: '#2A2A2A' },
   lineFocused: { backgroundColor: MeridianColors.accent },
+});
+
+// ─── UnitToggle ───────────────────────────────────────────────────────────────
+
+function UnitToggle({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: [string, string];
+  selected: string;
+  onSelect: (v: string) => void;
+}) {
+  return (
+    <View style={ut.wrap}>
+      {options.map((opt) => (
+        <TouchableOpacity
+          key={opt}
+          activeOpacity={0.6}
+          style={[ut.pill, opt === selected && ut.pillOn]}
+          onPress={() => onSelect(opt)}
+        >
+          <Text style={[ut.label, opt === selected && ut.labelOn]}>{opt}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+const ut = StyleSheet.create({
+  wrap: {
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  pill: {
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+  },
+  pillOn: {
+    borderColor: MeridianColors.accent,
+  },
+  label: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: MeridianColors.textMuted,
+    letterSpacing: 0.3,
+  },
+  labelOn: {
+    color: MeridianColors.accent,
+  },
 });
 
 // ─── SingleSelectChip ─────────────────────────────────────────────────────────
@@ -354,7 +449,12 @@ export default function OnboardingScreen() {
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<string | null>(null);
   const [heightCm, setHeightCm] = useState('');
+  const [heightFt, setHeightFt] = useState('');
+  const [heightIn, setHeightIn] = useState('');
+  const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
   const [weightKg, setWeightKg] = useState('');
+  const [weightLb, setWeightLb] = useState('');
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
   const [goal, setGoal] = useState<string | null>(null);
   const [experience, setExperience] = useState<string | null>(null);
   const [equipment, setEquipment] = useState<string | null>(null);
@@ -368,8 +468,8 @@ export default function OnboardingScreen() {
   });
 
   const advance = useCallback(
-    (updates: Partial<UserProfile>) => {
-      const next = step + 1;
+    (updates: Partial<UserProfile>, toStep?: number) => {
+      const next = toStep !== undefined ? toStep : step + 1;
       setProfile((prev) => ({ ...prev, ...updates }));
 
       Animated.timing(progressAnim, {
@@ -394,9 +494,39 @@ export default function OnboardingScreen() {
     [step, fadeAnim, progressAnim],
   );
 
-  const complete = useCallback(() => {
+  const complete = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error } = await supabase.from('profiles').upsert({
+          id: user.id,
+          name: profile.name,
+          age: profile.age,
+          sex: profile.sex,
+          height_cm: profile.height_cm,
+          weight_kg: profile.weight_kg,
+          goal: profile.goal,
+          experience: profile.experience,
+          equipment: profile.equipment,
+          training_days: profile.training_days,
+          health_notes: profile.health_notes,
+          wearable: profile.wearable,
+          units: profile.units,
+          onboarded_at: new Date().toISOString(),
+        });
+        if (error) {
+          console.log('[profile] error:', error);
+        } else {
+          console.log('[profile] saved');
+        }
+      } else {
+        console.log('[profile] error: no authenticated user');
+      }
+    } catch (e) {
+      console.log('[profile] error:', e);
+    }
     router.replace('/');
-  }, []);
+  }, [profile]);
 
   const autoAdvance = useCallback(
     (setter: (v: string) => void, value: string, updates: Partial<UserProfile>) => {
@@ -412,7 +542,44 @@ export default function OnboardingScreen() {
     );
   }, []);
 
+  const handleHeightUnitToggle = useCallback(
+    (unit: 'cm' | 'ft') => {
+      if (unit === heightUnit) return;
+      if (unit === 'ft') {
+        const converted = cmToFtIn(heightCm);
+        setHeightFt(converted.ft);
+        setHeightIn(converted.in);
+      } else {
+        setHeightCm(ftInToCm(heightFt, heightIn));
+      }
+      setHeightUnit(unit);
+    },
+    [heightUnit, heightCm, heightFt, heightIn],
+  );
+
+  const handleWeightUnitToggle = useCallback(
+    (unit: 'kg' | 'lb') => {
+      if (unit === weightUnit) return;
+      if (unit === 'lb') {
+        setWeightLb(kgToLb(weightKg));
+      } else {
+        setWeightKg(lbToKg(weightLb));
+      }
+      setWeightUnit(unit);
+    },
+    [weightUnit, weightKg, weightLb],
+  );
+
   const renderStep = () => {
+    const heightValid =
+      heightUnit === 'cm'
+        ? heightCm.length > 0 && Number(heightCm) > 0
+        : heightFt.length > 0 && Number(heightFt) > 0;
+    const weightValid =
+      weightUnit === 'kg'
+        ? weightKg.length > 0 && Number(weightKg) > 0
+        : weightLb.length > 0 && Number(weightLb) > 0;
+
     switch (step) {
       // 0 — Name
       case 0:
@@ -471,18 +638,72 @@ export default function OnboardingScreen() {
           <>
             <CoachQuestion primary="Height and weight — to set your baselines." />
             <View style={s.gap40} />
-            <NumberInputLine value={heightCm} onChangeText={setHeightCm} unit="cm" autoFocus />
-            <View style={s.gap16} />
-            <NumberInputLine value={weightKg} onChangeText={setWeightKg} unit="kg" />
+
+            <UnitToggle
+              options={['cm', 'ft + in']}
+              selected={heightUnit === 'cm' ? 'cm' : 'ft + in'}
+              onSelect={(v) => handleHeightUnitToggle(v === 'cm' ? 'cm' : 'ft')}
+            />
+            {heightUnit === 'cm' ? (
+              <NumberInputLine
+                value={heightCm}
+                onChangeText={setHeightCm}
+                unit="cm"
+                autoFocus
+              />
+            ) : (
+              <View style={s.ftInRow}>
+                <View style={s.ftInCol}>
+                  <NumberInputLine
+                    value={heightFt}
+                    onChangeText={setHeightFt}
+                    unit="ft"
+                    autoFocus
+                    noPadding
+                  />
+                </View>
+                <View style={s.ftInCol}>
+                  <NumberInputLine
+                    value={heightIn}
+                    onChangeText={setHeightIn}
+                    unit="in"
+                    noPadding
+                  />
+                </View>
+              </View>
+            )}
+
+            <View style={s.gap24} />
+
+            <UnitToggle
+              options={['kg', 'lb']}
+              selected={weightUnit}
+              onSelect={(v) => handleWeightUnitToggle(v as 'kg' | 'lb')}
+            />
+            <NumberInputLine
+              value={weightUnit === 'kg' ? weightKg : weightLb}
+              onChangeText={weightUnit === 'kg' ? setWeightKg : setWeightLb}
+              unit={weightUnit}
+            />
+
             <View style={s.spacer} />
             <BottomActions
-              continueVisible={
-                heightCm.length > 0 && Number(heightCm) > 0 &&
-                weightKg.length > 0 && Number(weightKg) > 0
-              }
-              onContinue={() =>
-                advance({ height_cm: Number(heightCm), weight_kg: Number(weightKg) })
-              }
+              continueVisible={heightValid && weightValid}
+              onContinue={() => {
+                const cm =
+                  heightUnit === 'cm'
+                    ? Number(heightCm)
+                    : Math.round(Number(heightFt) * 30.48 + Number(heightIn) * 2.54);
+                const kg =
+                  weightUnit === 'kg'
+                    ? Number(weightKg)
+                    : Math.round(Number(weightLb) * 0.453592 * 10) / 10;
+                advance({
+                  height_cm: cm,
+                  weight_kg: kg,
+                  units: { height: heightUnit, weight: weightUnit },
+                });
+              }}
             />
           </>
         );
@@ -569,15 +790,27 @@ export default function OnboardingScreen() {
             <View style={s.spacer} />
             <BottomActions
               skipVisible
-              onSkip={() => advance({ health_notes: '' })}
+              onSkip={() => advance({ health_notes: '' }, 10)}
               continueVisible={healthNotes.trim().length > 0}
               onContinue={() => advance({ health_notes: healthNotes.trim() })}
             />
           </>
         );
 
-      // 9 — Wearable
+      // 9 — Injury acknowledgement (only reached if health_notes has content)
       case 9:
+        return (
+          <>
+            <View style={s.finalPad}>
+              <Text style={s.finalText}>{injuryAcknowledgement}</Text>
+            </View>
+            <View style={s.spacer} />
+            <BottomActions continueVisible onContinue={() => advance({})} />
+          </>
+        );
+
+      // 10 — Wearable
+      case 10:
         return (
           <>
             <CoachQuestion primary="Do you wear a fitness tracker?" />
@@ -594,8 +827,8 @@ export default function OnboardingScreen() {
           </>
         );
 
-      // 10 — Test week intro
-      case 10:
+      // 11 — Test week intro
+      case 11:
         return (
           <>
             <View style={s.finalPad}>
@@ -650,8 +883,15 @@ const s = StyleSheet.create({
   content: { flex: 1 },
   topGap: { height: 80 },
   gap40: { height: 40 },
+  gap24: { height: 24 },
   gap16: { height: 16 },
   spacer: { flex: 1 },
+  ftInRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  ftInCol: { flex: 1 },
   finalPad: { paddingHorizontal: 24 },
   finalText: {
     fontFamily: fonts.serif,

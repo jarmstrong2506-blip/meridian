@@ -14,6 +14,7 @@ import {
 } from '@expo-google-fonts/inter';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { supabase } from '@/lib/supabase';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -27,6 +28,23 @@ export default function RootLayout() {
   });
 
   const [fontsReady, setFontsReady] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      console.log('[auth] bootstrap running');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          console.log('[auth] existing session');
+        } else {
+          await supabase.auth.signInAnonymously();
+          console.log('[auth] signed in anonymously');
+        }
+      } catch (e) {
+        console.log('[auth] error:', e);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
@@ -59,8 +77,8 @@ export default function RootLayout() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
-      <View style={{ maxWidth: 420, width: '100%', alignSelf: 'center', flex: 1, minHeight: '100vh' as unknown as number }}>
+    <View style={{ flex: 1, backgroundColor: '#0A0A0A', alignItems: 'center' }}>
+      <View style={{ width: '100%', maxWidth: 430, flex: 1, backgroundColor: '#0A0A0A' }}>
         {inner}
       </View>
     </View>
