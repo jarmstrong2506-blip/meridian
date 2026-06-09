@@ -8,6 +8,12 @@ import {
   Newsreader_500Medium,
 } from '@expo-google-fonts/newsreader';
 import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
+} from '@expo-google-fonts/dm-sans';
+import {
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
@@ -22,6 +28,10 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Newsreader_400Regular,
     Newsreader_500Medium,
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,

@@ -13,20 +13,89 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/theme';
+import { fonts, MeridianColors as C } from '@/constants/theme';
 
-// ─── Colour shortcuts ─────────────────────────────────────────────────────────
+// ─── Week strip data ──────────────────────────────────────────────────────────
 
-const BG     = Colors.dark.background;
-const CARD   = '#181818';
-const BORDER = '#2A2A2A';
-const GREEN  = '#5CAD83';
-const AMBER  = '#C49A50';
-const RED    = '#B86262';
-const MUTED  = Colors.dark.textSecondary;
+type WeekDay = { day: string; label: string; isToday: boolean; completed: boolean };
+
+const WEEK: WeekDay[] = [
+  { day: 'M', label: 'Lower',        isToday: false, completed: false },
+  { day: 'T', label: 'Upper',        isToday: true,  completed: false },
+  { day: 'W', label: 'Rest',         isToday: false, completed: false },
+  { day: 'T', label: 'Lower',        isToday: false, completed: false },
+  { day: 'F', label: 'Upper',        isToday: false, completed: false },
+  { day: 'S', label: 'Conditioning', isToday: false, completed: false },
+  { day: 'S', label: 'Rest',         isToday: false, completed: false },
+];
+
+function WeekStrip() {
+  return (
+    <View style={ws.row}>
+      {WEEK.map((d, i) => (
+        <View key={i} style={ws.cell}>
+          <Text style={[ws.dayLetter, d.isToday && ws.todayText]}>{d.day}</Text>
+          <Text style={[ws.label, d.isToday && ws.todayText]}>{d.label}</Text>
+          {d.isToday && <View style={ws.underline} />}
+          {d.completed && <View style={ws.tick} />}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const ws = StyleSheet.create({
+  row: {
+    flexDirection:     'row',
+    justifyContent:    'space-between',
+    paddingHorizontal: 16,
+    paddingVertical:   10,
+    borderBottomWidth: 1,
+    borderBottomColor: C.divider,
+    backgroundColor:   C.bg,
+  },
+  cell: {
+    flex:           1,
+    alignItems:     'center',
+    gap:            3,
+    paddingBottom:  4,
+  },
+  dayLetter: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize:   10,
+    color:      C.textMuted,
+    textTransform: 'uppercase',
+  },
+  label: {
+    fontFamily: fonts.sans,
+    fontSize:   9,
+    color:      C.textFaint,
+  },
+  todayText: {
+    color: C.text,
+  },
+  underline: {
+    position:        'absolute',
+    bottom:          0,
+    width:           '60%',
+    height:          1.5,
+    borderRadius:    1,
+    backgroundColor: C.text,
+  },
+  // hidden while completed:false — visible when true
+  tick: {
+    width:           5,
+    height:          5,
+    borderRadius:    2.5,
+    backgroundColor: C.green,
+    marginTop:       1,
+  },
+});
+
+// ─── Intensity accent ─────────────────────────────────────────────────────────
 
 const INTENSITY_COLOR: Record<string, string> = {
-  Light: GREEN, Moderate: AMBER, High: RED,
+  Light: C.green, Moderate: C.gold, High: C.red,
 };
 
 // ─── Types (AI-ready shape) ───────────────────────────────────────────────────
@@ -217,6 +286,7 @@ export default function SessionScreen() {
           totalExercises={exercises.length}
           completedExercises={completedExCount}
         />
+        <WeekStrip />
       </SafeAreaView>
 
       <KeyboardAvoidingView
@@ -288,7 +358,7 @@ function SessionHeader({
             <SymbolView
               name={{ ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }}
               size={17}
-              tintColor="#FFFFFF"
+              tintColor={C.textMuted}
             />
           </Pressable>
 
@@ -334,12 +404,12 @@ function ExerciseCard({
   onAdjustWeight,
   onUpdateNotes,
 }: ExerciseCardProps) {
-  const allDone       = exercise.sets.every(s => s.completed);
+  const allDone        = exercise.sets.every(s => s.completed);
   const completedCount = exercise.sets.filter(s => s.completed).length;
 
   return (
     <View style={ec.wrapper}>
-      <View style={[ec.accentBar, { backgroundColor: isActive ? GREEN : 'transparent' }]} />
+      <View style={[ec.accentBar, { backgroundColor: isActive ? C.gold : 'transparent' }]} />
 
       <View style={ec.body}>
         <View style={ec.header}>
@@ -366,18 +436,18 @@ function ExerciseCard({
         {!allDone && (
           <View style={ec.adjustRow}>
             <Pressable
-              style={({ pressed }) => [ec.adjustBtn, ec.amberBtn, pressed && ec.btnPressed]}
+              style={({ pressed }) => [ec.adjustBtn, pressed && ec.btnPressed]}
               onPress={() => onAdjustWeight(-2.5)}
             >
-              <Text style={[ec.adjustLabel, { color: AMBER }]}>Too Hard</Text>
-              <Text style={[ec.adjustSub, { color: AMBER }]}>−2.5 kg</Text>
+              <Text style={ec.adjustLabel}>Too Hard</Text>
+              <Text style={ec.adjustSub}>−2.5 kg</Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [ec.adjustBtn, ec.greenBtn, pressed && ec.btnPressed]}
+              style={({ pressed }) => [ec.adjustBtn, pressed && ec.btnPressed]}
               onPress={() => onAdjustWeight(2.5)}
             >
-              <Text style={[ec.adjustLabel, { color: GREEN }]}>Too Easy</Text>
-              <Text style={[ec.adjustSub, { color: GREEN }]}>+2.5 kg</Text>
+              <Text style={ec.adjustLabel}>Too Easy</Text>
+              <Text style={ec.adjustSub}>+2.5 kg</Text>
             </Pressable>
           </View>
         )}
@@ -387,7 +457,7 @@ function ExerciseCard({
           value={exercise.notes}
           onChangeText={onUpdateNotes}
           placeholder="Add notes..."
-          placeholderTextColor="#222"
+          placeholderTextColor={C.textFaint}
           multiline
           submitBehavior="blurAndSubmit"
         />
@@ -424,7 +494,7 @@ function SetRow({ setNumber, set, onComplete }: SetRowProps) {
       <View style={[sr.row, sr.completedRow, under && sr.underRow]}>
         <Text style={sr.completedNum}>{setNumber}</Text>
         <View style={sr.completedValues}>
-          <Text style={[sr.completedReps, under && { color: RED }]}>{set.actualReps}</Text>
+          <Text style={[sr.completedReps, under && { color: C.red }]}>{set.actualReps}</Text>
           <Text style={sr.unit}>reps</Text>
           <View style={sr.dot} />
           <Text style={sr.completedWeight}>{fmtWeight(set.actualWeight)}</Text>
@@ -433,7 +503,7 @@ function SetRow({ setNumber, set, onComplete }: SetRowProps) {
         <SymbolView
           name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
           size={20}
-          tintColor={under ? RED : GREEN}
+          tintColor={under ? C.red : C.textMuted}
         />
       </View>
     );
@@ -487,7 +557,7 @@ function SetRow({ setNumber, set, onComplete }: SetRowProps) {
         <SymbolView
           name={{ ios: 'circle', android: 'radio_button_unchecked', web: 'radio_button_unchecked' }}
           size={26}
-          tintColor="#2E2E2E"
+          tintColor={C.textFaint}
         />
       </Pressable>
     </View>
@@ -518,19 +588,19 @@ function RestTimerPanel({
       <View style={rt.inner}>
         <View style={rt.topRow}>
           <Text style={rt.label}>REST</Text>
-          <Text style={[rt.time, done && { color: GREEN }]}>{mm}:{ss}</Text>
+          <Text style={rt.time}>{mm}:{ss}</Text>
           <View style={rt.btns}>
             <Pressable
-              style={({ pressed }) => [rt.addBtn, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [rt.quietBtn, pressed && { opacity: 0.6 }]}
               onPress={onAddTime}
             >
-              <Text style={rt.addBtnText}>+30s</Text>
+              <Text style={rt.quietBtnText}>+30s</Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [rt.skipBtn, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [rt.quietBtn, pressed && { opacity: 0.6 }]}
               onPress={onSkip}
             >
-              <Text style={rt.skipBtnText}>{done ? 'Done' : 'Skip'}</Text>
+              <Text style={rt.quietBtnText}>{done ? 'Done' : 'Skip'}</Text>
             </Pressable>
           </View>
         </View>
@@ -545,6 +615,9 @@ function RestTimerPanel({
 
 // ─── Summary screen ───────────────────────────────────────────────────────────
 
+const COACH_RECOVERY =
+  "Good work. Your posterior chain took a real hit today — prioritise sleep and protein tonight. You're building the base; the strength will come.";
+
 function SummaryScreen({
   exercises,
   hasUnderTarget,
@@ -554,9 +627,9 @@ function SummaryScreen({
   hasUnderTarget: boolean;
   onSave: () => void;
 }) {
-  const [rating, setRating]               = useState<number | null>(null);
-  const [sessionNote, setSessionNote]     = useState('');
-  const [underNote, setUnderNote]         = useState('');
+  const [rating, setRating]           = useState<number | null>(null);
+  const [sessionNote, setSessionNote] = useState('');
+  const [underNote, setUnderNote]     = useState('');
 
   const totalSets     = exercises.reduce((n, ex) => n + ex.sets.length, 0);
   const completedSets = exercises.reduce((n, ex) => n + ex.sets.filter(s => s.completed).length, 0);
@@ -564,7 +637,7 @@ function SummaryScreen({
   const exDone        = exercises.filter(ex => ex.sets.every(s => s.completed)).length;
 
   return (
-    <View style={{ flex: 1, backgroundColor: BG }}>
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
       <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={sum.content}
@@ -576,7 +649,7 @@ function SummaryScreen({
             <SymbolView
               name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
               size={40}
-              tintColor={GREEN}
+              tintColor={C.green}
             />
             <Text style={sum.title}>Session Complete</Text>
             <Text style={sum.titleSub}>{SESSION_META.type} · {SESSION_META.focus}</Text>
@@ -587,13 +660,19 @@ function SummaryScreen({
             <StatChip label="SETS" value={`${completedSets}/${totalSets}`} />
             <StatChip label="EXERCISES" value={`${exDone}/${exercises.length}`} />
             {underCount > 0 && (
-              <StatChip label="UNDER TARGET" value={String(underCount)} accent={RED} />
+              <StatChip label="UNDER TARGET" value={String(underCount)} accent={C.red} />
             )}
+          </View>
+
+          {/* AI coach recovery message */}
+          <View style={sum.coachWrap}>
+            <View style={[sum.coachBorder, { backgroundColor: C.gold }]} />
+            <Text style={sum.coachText}>{COACH_RECOVERY}</Text>
           </View>
 
           {/* Rating */}
           <View style={sum.section}>
-            <Text style={sum.label}>HOW WAS IT?</Text>
+            <Text style={sum.sectionLabel}>HOW WAS IT?</Text>
             <View style={sum.ratingRow}>
               {[1,2,3,4,5,6,7,8,9,10].map(n => (
                 <Pressable
@@ -610,7 +689,7 @@ function SummaryScreen({
           {/* Under-target prompt */}
           {hasUnderTarget && (
             <View style={sum.section}>
-              <Text style={sum.label}>SETS UNDER TARGET</Text>
+              <Text style={sum.sectionLabel}>SETS UNDER TARGET</Text>
               <Text style={sum.prompt}>
                 A couple of sets came in under target today. Anything worth noting?
               </Text>
@@ -619,7 +698,7 @@ function SummaryScreen({
                 value={underNote}
                 onChangeText={setUnderNote}
                 placeholder="Heavy day, poor sleep, form focus..."
-                placeholderTextColor="#252525"
+                placeholderTextColor={C.textFaint}
                 multiline
                 textAlignVertical="top"
               />
@@ -628,13 +707,13 @@ function SummaryScreen({
 
           {/* Session notes */}
           <View style={sum.section}>
-            <Text style={sum.label}>SESSION NOTES</Text>
+            <Text style={sum.sectionLabel}>SESSION NOTES</Text>
             <TextInput
               style={sum.textArea}
               value={sessionNote}
               onChangeText={setSessionNote}
               placeholder="How did it feel overall?"
-              placeholderTextColor="#252525"
+              placeholderTextColor={C.textFaint}
               multiline
               textAlignVertical="top"
             />
@@ -672,17 +751,17 @@ function StatChip({
 // ─── StyleSheets ─────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  screen:             { flex: 1, backgroundColor: BG },
-  safeTop:            { backgroundColor: BG },
-  flex:               { flex: 1 },
+  screen:      { flex: 1, backgroundColor: C.bg },
+  safeTop:     { backgroundColor: C.bg },
+  flex:        { flex: 1 },
   scrollContent: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingTop:        14,
     paddingBottom:     40,
-    gap:               14,
+    gap:               12,
   },
   completeBtn: {
-    backgroundColor: GREEN,
+    backgroundColor: C.gold,
     borderRadius:    14,
     paddingVertical: 17,
     alignItems:      'center',
@@ -690,9 +769,9 @@ const s = StyleSheet.create({
   },
   completeBtnPressed: { opacity: 0.8 },
   completeBtnText: {
-    color:         BG,
-    fontSize:      15,
-    fontWeight:    '600',
+    fontFamily: fonts.sansSemiBold,
+    color:      C.bg,
+    fontSize:   15,
     letterSpacing: 0.2,
   },
 });
@@ -700,13 +779,13 @@ const s = StyleSheet.create({
 const h = StyleSheet.create({
   wrapper: {
     flexDirection:     'row',
-    backgroundColor:   BG,
+    backgroundColor:   C.bg,
     borderBottomWidth: 1,
-    borderBottomColor: '#131313',
+    borderBottomColor: C.divider,
   },
   intensityBar: { width: 3 },
   content: {
-    flex:             1,
+    flex:              1,
     paddingHorizontal: 16,
     paddingTop:        12,
     paddingBottom:     14,
@@ -721,21 +800,23 @@ const h = StyleSheet.create({
     width:           32,
     height:          32,
     borderRadius:    16,
-    backgroundColor: '#1C1C1C',
+    backgroundColor: C.card,
+    borderWidth:     1,
+    borderColor:     C.cardBorder,
     alignItems:      'center',
     justifyContent:  'center',
   },
   titleGroup: { flex: 1 },
   title: {
-    color:         '#FFFFFF',
+    fontFamily:    fonts.sansBold,
+    color:         C.text,
     fontSize:      16,
-    fontWeight:    '600',
     letterSpacing: -0.2,
   },
   subtitle: {
-    color:      MUTED,
+    fontFamily: fonts.sans,
+    color:      C.textMuted,
     fontSize:   12,
-    fontWeight: '400',
     marginTop:  2,
   },
   counter: {
@@ -743,42 +824,42 @@ const h = StyleSheet.create({
     alignItems:    'baseline',
   },
   counterNum: {
-    color:      '#FFFFFF',
+    fontFamily: fonts.sansSemiBold,
+    color:      C.text,
     fontSize:   18,
-    fontWeight: '600',
   },
   counterOf: {
-    color:      '#3A3A3A',
+    fontFamily: fonts.sans,
+    color:      C.textMuted,
     fontSize:   12,
-    fontWeight: '500',
   },
   progressTrack: {
     height:          2,
-    backgroundColor: '#151515',
+    backgroundColor: C.divider,
     borderRadius:    1,
     overflow:        'hidden',
   },
   progressFill: {
     height:          2,
-    backgroundColor: GREEN,
+    backgroundColor: C.textMuted,
     borderRadius:    1,
   },
 });
 
 const ec = StyleSheet.create({
   wrapper: {
-    flexDirection: 'row',
-    backgroundColor: CARD,
-    borderRadius:    16,
+    flexDirection:   'row',
+    backgroundColor: C.card,
+    borderRadius:    14,
     borderWidth:     1,
-    borderColor:     BORDER,
+    borderColor:     C.cardBorder,
     overflow:        'hidden',
   },
   accentBar: { width: 3 },
   body: {
     flex:    1,
-    padding: 18,
-    gap:     16,
+    padding: 16,
+    gap:     14,
   },
   header: {
     flexDirection:  'row',
@@ -786,9 +867,9 @@ const ec = StyleSheet.create({
     alignItems:     'flex-start',
   },
   name: {
-    color:         '#FFFFFF',
-    fontSize:      19,
-    fontWeight:    '600',
+    fontFamily:    fonts.sansBold,
+    color:         C.text,
+    fontSize:      18,
     letterSpacing: -0.3,
     flex:          1,
   },
@@ -798,22 +879,22 @@ const ec = StyleSheet.create({
     marginLeft: 8,
   },
   badge: {
-    backgroundColor: '#111111',
-    borderRadius:    5,
+    backgroundColor:  C.bg,
+    borderRadius:     5,
     paddingHorizontal: 8,
-    paddingVertical:   3,
+    paddingVertical:  3,
   },
   badgeText: {
-    color:          '#3A3A3A',
-    fontSize:       9,
-    fontWeight:     '600',
-    letterSpacing:  1.2,
-    textTransform:  'uppercase',
+    fontFamily:    fonts.sansSemiBold,
+    color:         C.textFaint,
+    fontSize:      9,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   setCount: {
-    color:      '#3A3A3A',
+    fontFamily: fonts.sansMedium,
+    color:      C.textMuted,
     fontSize:   12,
-    fontWeight: '500',
   },
   setsList: { gap: 4 },
   adjustRow: {
@@ -824,58 +905,63 @@ const ec = StyleSheet.create({
     flex:            1,
     borderRadius:    10,
     borderWidth:     1,
+    borderColor:     C.cardBorder,
+    backgroundColor: 'transparent',
     paddingVertical: 11,
     alignItems:      'center',
     gap:             2,
   },
-  amberBtn: {
-    backgroundColor: `${AMBER}12`,
-    borderColor:     `${AMBER}30`,
-  },
-  greenBtn: {
-    backgroundColor: `${GREEN}12`,
-    borderColor:     `${GREEN}30`,
-  },
   btnPressed:  { opacity: 0.65 },
-  adjustLabel: { fontSize: 13, fontWeight: '600' },
-  adjustSub:   { fontSize: 11, fontWeight: '400', opacity: 0.7 },
+  adjustLabel: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize:   13,
+    color:      C.text,
+  },
+  adjustSub: {
+    fontFamily: fonts.sans,
+    fontSize:   11,
+    color:      C.textMuted,
+  },
   notes: {
-    color:           '#555',
-    fontSize:        13,
-    borderTopWidth:  1,
-    borderTopColor:  '#1A1A1A',
-    paddingTop:      12,
-    minHeight:       32,
+    fontFamily:     fonts.sans,
+    color:          C.textMuted,
+    fontSize:       13,
+    borderTopWidth: 1,
+    borderTopColor: C.divider,
+    paddingTop:     12,
+    minHeight:      32,
   },
 });
 
 const sr = StyleSheet.create({
   row: {
-    flexDirection: 'row',
-    alignItems:    'center',
+    flexDirection:  'row',
+    alignItems:     'center',
     paddingVertical: 8,
     gap:             10,
     borderRadius:    8,
   },
-  completedRow: { opacity: 0.65 },
+  completedRow: { opacity: 0.55 },
   underRow: {
-    opacity:          1,
-    backgroundColor:  `${RED}09`,
+    opacity:           1,
+    backgroundColor:   `${C.red}0F`,
     paddingHorizontal: 6,
-    marginHorizontal: -4,
+    marginHorizontal:  -4,
   },
   numPill: {
     width:           24,
     height:          24,
     borderRadius:    12,
-    backgroundColor: '#111',
+    backgroundColor: C.bg,
+    borderWidth:     1,
+    borderColor:     C.divider,
     alignItems:      'center',
     justifyContent:  'center',
   },
   numText: {
-    color:      '#3A3A3A',
+    fontFamily: fonts.sansSemiBold,
+    color:      C.textMuted,
     fontSize:   11,
-    fontWeight: '600',
   },
   inputs: {
     flex:          1,
@@ -883,39 +969,39 @@ const sr = StyleSheet.create({
     gap:           8,
   },
   inputWrap: {
-    flex:            1,
-    flexDirection:   'row',
-    alignItems:      'center',
-    backgroundColor: '#111111',
-    borderRadius:    8,
-    borderWidth:     1,
-    borderColor:     '#1E1E1E',
+    flex:              1,
+    flexDirection:     'row',
+    alignItems:        'center',
+    backgroundColor:   C.bg,
+    borderRadius:      8,
+    borderWidth:       1,
+    borderColor:       C.divider,
     paddingHorizontal: 10,
     paddingVertical:   8,
     gap:               4,
   },
   input: {
+    fontFamily: fonts.sansSemiBold,
     flex:       1,
-    color:      '#FFFFFF',
+    color:      C.text,
     fontSize:   15,
-    fontWeight: '600',
     padding:    0,
     minWidth:   28,
     textAlign:  'center',
   },
   unit: {
-    color:      '#2E2E2E',
+    fontFamily: fonts.sans,
+    color:      C.textFaint,
     fontSize:   11,
-    fontWeight: '500',
   },
   doneBtn: { padding: 2 },
 
   // Completed row
   completedNum: {
+    fontFamily: fonts.sansSemiBold,
     width:      24,
-    color:      '#2E2E2E',
+    color:      C.textFaint,
     fontSize:   11,
-    fontWeight: '600',
     textAlign:  'center',
   },
   completedValues: {
@@ -925,29 +1011,29 @@ const sr = StyleSheet.create({
     gap:           4,
   },
   completedReps: {
-    color:      '#FFFFFF',
+    fontFamily: fonts.sansSemiBold,
+    color:      C.text,
     fontSize:   15,
-    fontWeight: '600',
   },
   completedWeight: {
-    color:      '#888',
+    fontFamily: fonts.sansMedium,
+    color:      C.textMuted,
     fontSize:   14,
-    fontWeight: '500',
   },
   dot: {
-    width:           3,
-    height:          3,
-    borderRadius:    1.5,
-    backgroundColor: '#2A2A2A',
+    width:            3,
+    height:           3,
+    borderRadius:     1.5,
+    backgroundColor:  C.divider,
     marginHorizontal: 2,
   },
 });
 
 const rt = StyleSheet.create({
   panel: {
-    backgroundColor: '#0D0D0D',
+    backgroundColor: C.card,
     borderTopWidth:  1,
-    borderTopColor:  '#1A1A1A',
+    borderTopColor:  C.cardBorder,
     paddingTop:      14,
   },
   inner: {
@@ -960,59 +1046,46 @@ const rt = StyleSheet.create({
     gap:           10,
   },
   label: {
-    color:         '#2A2A2A',
+    fontFamily:    fonts.sansSemiBold,
+    color:         C.textFaint,
     fontSize:      10,
-    fontWeight:    '700',
     letterSpacing: 2,
     width:         38,
   },
   time: {
+    fontFamily:    fonts.sansBold,
     flex:          1,
-    color:         '#CCCCCC',
+    color:         C.text,
     fontSize:      28,
-    fontWeight:    '600',
     letterSpacing: -1,
   },
   btns: {
     flexDirection: 'row',
     gap:           8,
   },
-  addBtn: {
-    backgroundColor: '#1A1A1A',
-    borderRadius:    8,
+  quietBtn: {
+    backgroundColor:   C.bg,
+    borderRadius:      8,
     paddingHorizontal: 14,
     paddingVertical:   8,
     borderWidth:       1,
-    borderColor:       '#272727',
+    borderColor:       C.divider,
   },
-  addBtnText: {
-    color:      '#555',
+  quietBtnText: {
+    fontFamily: fonts.sansMedium,
+    color:      C.textMuted,
     fontSize:   12,
-    fontWeight: '500',
-  },
-  skipBtn: {
-    backgroundColor: '#1A1A1A',
-    borderRadius:    8,
-    paddingHorizontal: 14,
-    paddingVertical:   8,
-    borderWidth:       1,
-    borderColor:       '#2E2E2E',
-  },
-  skipBtnText: {
-    color:      '#888',
-    fontSize:   12,
-    fontWeight: '500',
   },
   track: {
     height:          2,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: C.divider,
     borderRadius:    1,
     overflow:        'hidden',
     marginBottom:    4,
   },
   fill: {
     height:          2,
-    backgroundColor: GREEN,
+    backgroundColor: C.gold,
     borderRadius:    1,
   },
 });
@@ -1025,55 +1098,73 @@ const sum = StyleSheet.create({
     gap:               24,
   },
   heading: {
-    alignItems: 'center',
-    gap:        10,
+    alignItems:    'center',
+    gap:           10,
     paddingBottom: 6,
   },
   title: {
-    color:         '#FFFFFF',
+    fontFamily:    fonts.sansBold,
+    color:         C.text,
     fontSize:      26,
-    fontWeight:    '700',
     letterSpacing: -0.5,
   },
   titleSub: {
-    color:      '#444',
+    fontFamily: fonts.sans,
+    color:      C.textMuted,
     fontSize:   13,
-    fontWeight: '400',
   },
   statsRow: {
     flexDirection: 'row',
     gap:           10,
   },
   chip: {
-    flex:            1,
-    backgroundColor: CARD,
-    borderRadius:    12,
-    borderWidth:     1,
-    borderColor:     BORDER,
-    paddingVertical: 14,
+    flex:              1,
+    backgroundColor:   C.card,
+    borderRadius:      12,
+    borderWidth:       1,
+    borderColor:       C.cardBorder,
+    paddingVertical:   14,
     paddingHorizontal: 10,
-    alignItems:      'center',
-    gap:             6,
+    alignItems:        'center',
+    gap:               6,
   },
   chipValue: {
-    color:         '#FFFFFF',
+    fontFamily:    fonts.sansBold,
+    color:         C.text,
     fontSize:      18,
-    fontWeight:    '700',
     letterSpacing: -0.3,
   },
   chipLabel: {
-    color:         '#2E2E2E',
+    fontFamily:    fonts.sansSemiBold,
+    color:         C.textFaint,
     fontSize:      8,
-    fontWeight:    '600',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
+
+  // Coach recovery message
+  coachWrap: {
+    flexDirection: 'row',
+  },
+  coachBorder: {
+    width:        2,
+    borderRadius: 1,
+    marginRight:  14,
+  },
+  coachText: {
+    flex:       1,
+    fontFamily: fonts.serif,
+    fontSize:   18,
+    color:      C.text,
+    lineHeight: 18 * 1.35,
+  },
+
   section: { gap: 10 },
-  label: {
-    color:         '#2E2E2E',
+  sectionLabel: {
+    fontFamily:    fonts.sansSemiBold,
+    color:         C.textMuted,
     fontSize:      9,
-    fontWeight:    '600',
-    letterSpacing: 2,
+    letterSpacing: 0.09 * 9,
     textTransform: 'uppercase',
   },
   ratingRow: {
@@ -1084,45 +1175,45 @@ const sum = StyleSheet.create({
     width:           30,
     height:          30,
     borderRadius:    15,
-    backgroundColor: '#111',
+    backgroundColor: C.card,
     borderWidth:     1,
-    borderColor:     '#1E1E1E',
+    borderColor:     C.cardBorder,
     alignItems:      'center',
     justifyContent:  'center',
   },
   ratingActive: {
-    backgroundColor: GREEN,
-    borderColor:     GREEN,
+    backgroundColor: C.gold,
+    borderColor:     C.gold,
   },
   ratingNum: {
-    color:      '#3A3A3A',
+    fontFamily: fonts.sansSemiBold,
+    color:      C.textMuted,
     fontSize:   12,
-    fontWeight: '600',
   },
   ratingNumActive: {
-    color:      BG,
-    fontWeight: '700',
+    fontFamily: fonts.sansBold,
+    color:      C.bg,
   },
   prompt: {
-    color:      '#555',
+    fontFamily: fonts.sans,
+    color:      C.textMuted,
     fontSize:   13,
     lineHeight: 20,
-    fontWeight: '400',
     marginTop:  -2,
   },
   textArea: {
-    backgroundColor: CARD,
+    fontFamily:      fonts.sans,
+    backgroundColor: C.card,
     borderRadius:    12,
     borderWidth:     1,
-    borderColor:     BORDER,
+    borderColor:     C.cardBorder,
     padding:         14,
-    color:           '#CCCCCC',
+    color:           C.text,
     fontSize:        14,
     minHeight:       80,
-    fontWeight:      '400',
   },
   saveBtn: {
-    backgroundColor: GREEN,
+    backgroundColor: C.gold,
     borderRadius:    14,
     paddingVertical: 17,
     alignItems:      'center',
@@ -1130,9 +1221,9 @@ const sum = StyleSheet.create({
   },
   saveBtnPressed: { opacity: 0.8 },
   saveBtnText: {
-    color:         BG,
+    fontFamily:    fonts.sansSemiBold,
+    color:         C.bg,
     fontSize:      15,
-    fontWeight:    '600',
     letterSpacing: 0.2,
   },
 });

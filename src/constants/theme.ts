@@ -3,39 +3,48 @@ import '@/global.css';
 export const Colors = {
   light: {
     text: '#FFFFFF',
-    background: '#0A0A0A',
-    backgroundElement: '#141414',
-    backgroundSelected: '#1E1E1E',
-    textSecondary: '#5A5A5A',
+    background: '#0F1012',
+    backgroundElement: '#181B20',
+    backgroundSelected: '#212530',
+    textSecondary: '#4D5565',
   },
   dark: {
     text: '#FFFFFF',
-    background: '#0A0A0A',
-    backgroundElement: '#141414',
-    backgroundSelected: '#1E1E1E',
-    textSecondary: '#5A5A5A',
+    background: '#0F1012',
+    backgroundElement: '#181B20',
+    backgroundSelected: '#212530',
+    textSecondary: '#4D5565',
   },
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const MeridianColors = {
-  bg:         '#0A0A0A',
-  card:       '#181818',
-  border:     '#2A2A2A',
-  tabBar:     '#0D0D0D',
-  accent:     '#9FB89A',   // muted sage — only emphasis colour on Home
-  text:       '#F2F2F0',   // warm off-white
-  textMuted:  '#777777',
-  textFaint:  '#555555',
+  bg:         '#0F1012',
+  card:       '#181B20',
+  cardBorder: '#212530',
+  divider:    '#191C22',
+  text:       '#EEEDE8',
+  textMuted:  '#4D5565',
+  textFaint:  '#2E3340',
+  gold:       '#C9A96B',
+  blue:       '#4A7FA5',
+  green:      '#4D9A78',
+  red:        '#C16E5A',
+  // legacy aliases kept for onboarding
+  border:     '#212530',
+  tabBar:     '#0F1012',
+  accent:     '#C9A96B',
 } as const;
 
 export const fonts = {
-  serif:       'Newsreader_400Regular',
+  sans:        'DMSans_400Regular',
+  sansMedium:  'DMSans_500Medium',
+  sansSemiBold:'DMSans_600SemiBold',
+  sansBold:    'DMSans_700Bold',
+  serif:       'Newsreader_500Medium',
+  // legacy aliases used by onboarding
   serifMedium: 'Newsreader_500Medium',
-  sans:        'Inter_400Regular',
-  sansMedium:  'Inter_500Medium',
-  sansSemiBold:'Inter_600SemiBold',
 } as const;
 
 export const Spacing = {
