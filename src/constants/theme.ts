@@ -1,7 +1,5 @@
 import '@/global.css';
 
-import { Platform } from 'react-native';
-
 export const Colors = {
   light: {
     text: '#FFFFFF',
@@ -22,37 +20,23 @@ export const Colors = {
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const MeridianColors = {
-  accent:        '#44C760',  // tab indicator
-  border:        '#1E1E1E',  // internal dividers
-  tabBar:        '#0D0D0D',  // tab bar bg
-  card:          '#141414',  // base card surface
-  surface:       '#181818',  // elevated screen cards
-  surfaceBorder: '#2A2A2A',  // screen card borders
-  scoreGreen:    '#5CAD83',  // recovery / on-target (muted sage)
-  scoreAmber:    '#C49A50',  // moderate / caution (warm gold)
-  scoreRed:      '#B86262',  // caution / under target (dusty rose)
+  bg:         '#0A0A0A',
+  card:       '#181818',
+  border:     '#2A2A2A',
+  tabBar:     '#0D0D0D',
+  accent:     '#9FB89A',   // muted sage — only emphasis colour on Home
+  text:       '#F2F2F0',   // warm off-white
+  textMuted:  '#777777',
+  textFaint:  '#555555',
 } as const;
 
-export const Fonts = Platform.select({
-  ios: {
-    sans: 'system-ui',
-    serif: 'ui-serif',
-    rounded: 'ui-rounded',
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
+export const fonts = {
+  serif:       'Newsreader_400Regular',
+  serifMedium: 'Newsreader_500Medium',
+  sans:        'Inter_400Regular',
+  sansMedium:  'Inter_500Medium',
+  sansSemiBold:'Inter_600SemiBold',
+} as const;
 
 export const Spacing = {
   half: 2,

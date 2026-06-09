@@ -13,16 +13,16 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, MeridianColors } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
 
 // ─── Colour shortcuts ─────────────────────────────────────────────────────────
 
 const BG     = Colors.dark.background;
-const CARD   = MeridianColors.surface;
-const BORDER = MeridianColors.surfaceBorder;
-const GREEN  = MeridianColors.scoreGreen;
-const AMBER  = MeridianColors.scoreAmber;
-const RED    = MeridianColors.scoreRed;
+const CARD   = '#181818';
+const BORDER = '#2A2A2A';
+const GREEN  = '#5CAD83';
+const AMBER  = '#C49A50';
+const RED    = '#B86262';
 const MUTED  = Colors.dark.textSecondary;
 
 const INTENSITY_COLOR: Record<string, string> = {
