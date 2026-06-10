@@ -1,9 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { useRouter } from 'expo-router';
+import Svg, { Circle } from 'react-native-svg';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { fonts, MeridianColors as C } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
+import { todaySchedule } from '@/data/mockSchedule';
+import { BackgroundWash } from '@/components/background-wash';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,30 +83,37 @@ const DAY_LABELS = ['W', 'T', 'F', 'S', 'S', 'M', 'T'];
 
 // ─── Arc component ────────────────────────────────────────────────────────────
 
-const SIZE = 52;
-const RADIUS = 20;
-const STROKE = 2.5;
-const CX = SIZE / 2;
-const CY = SIZE / 2;
+const SIZE        = 52;
+const RADIUS      = 20;
+const STROKE      = 2.5;
+const CX          = SIZE / 2;
+const CY          = SIZE / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-function arcPath(pct: number): string {
-  const angle = pct * 2 * Math.PI;
-  const startX = CX;
-  const startY = CY - RADIUS;
-  const endX = CX + RADIUS * Math.sin(angle);
-  const endY = CY - RADIUS * Math.cos(angle);
-  const large = angle > Math.PI ? 1 : 0;
-  if (pct >= 0.9999) {
-    // full circle via two half-arcs
-    return `M ${startX} ${startY} A ${RADIUS} ${RADIUS} 0 1 1 ${startX - 0.001} ${startY} Z`;
-  }
-  return `M ${startX} ${startY} A ${RADIUS} ${RADIUS} 0 ${large} 1 ${endX} ${endY}`;
-}
+// Animated.createAnimatedComponent injects collapsable={false} to prevent native
+// view collapsing. On web this prop reaches the SVG DOM element and triggers a
+// React warning. Strip it in a shim before it gets that far.
+const _CircleBase =
+  Platform.OS === 'web'
+    ? ({ collapsable: _c, ...p }: any) => <Circle {...p} />
+    : Circle;
+
+const AnimatedCircle = Animated.createAnimatedComponent(_CircleBase);
 
 function MetricArc({ value, color, mainValue, subValue }: {
   value: number; color: string; mainValue: string; subValue?: string;
 }) {
+  const dashOffset = useRef(new Animated.Value(CIRCUMFERENCE)).current;
+
+  useEffect(() => {
+    Animated.timing(dashOffset, {
+      toValue: CIRCUMFERENCE * (1 - value),
+      duration: 700,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, []);
+
   return (
     <View style={arcStyles.wrap}>
       <Svg width={SIZE} height={SIZE}>
@@ -102,14 +121,17 @@ function MetricArc({ value, color, mainValue, subValue }: {
           cx={CX} cy={CY} r={RADIUS}
           stroke={C.divider} strokeWidth={STROKE} fill="none"
         />
-        <Path
-          d={arcPath(value)}
-          stroke={color} strokeWidth={STROKE}
-          strokeLinecap="round" fill="none"
+        <AnimatedCircle
+          cx={CX} cy={CY} r={RADIUS}
+          stroke={color} strokeWidth={STROKE} fill="none"
+          strokeLinecap="round"
+          strokeDasharray={CIRCUMFERENCE}
+          strokeDashoffset={dashOffset}
+          transform={`rotate(-90, ${CX}, ${CY})`}
         />
       </Svg>
       <View style={arcStyles.label}>
-        <Text style={[arcStyles.main, { color: C.text }]}>{mainValue}</Text>
+        <Text style={arcStyles.main}>{mainValue}</Text>
         {subValue && <Text style={arcStyles.sub}>{subValue}</Text>}
       </View>
     </View>
@@ -132,6 +154,8 @@ const arcStyles = StyleSheet.create({
     fontFamily: fonts.sansSemiBold,
     fontSize: 13,
     lineHeight: 15,
+    color: C.text,
+    fontVariant: ['tabular-nums'],
   },
   sub: {
     fontFamily: fonts.sans,
@@ -144,10 +168,12 @@ const arcStyles = StyleSheet.create({
 // ─── Bar chart ────────────────────────────────────────────────────────────────
 
 const BAR_CHART_HEIGHT = 44;
-const BAR_WIDTH = 12;
-const BAR_GAP = 8;
+const BAR_WIDTH  = 12;
+const BAR_GAP    = 8;
 const BAR_RADIUS = 3;
 const CHART_WIDTH = 7 * BAR_WIDTH + 6 * BAR_GAP;
+
+import { Rect } from 'react-native-svg';
 
 function BarChart({ bars, color }: { bars: number[]; color: string }) {
   const max = Math.max(...bars);
@@ -155,11 +181,11 @@ function BarChart({ bars, color }: { bars: number[]; color: string }) {
     <View>
       <Svg width={CHART_WIDTH} height={BAR_CHART_HEIGHT}>
         {bars.map((v, i) => {
-          const barH = Math.round((v / max) * BAR_CHART_HEIGHT);
-          const x = i * (BAR_WIDTH + BAR_GAP);
-          const y = BAR_CHART_HEIGHT - barH;
+          const barH    = Math.round((v / max) * BAR_CHART_HEIGHT);
+          const x       = i * (BAR_WIDTH + BAR_GAP);
+          const y       = BAR_CHART_HEIGHT - barH;
           const isToday = i === bars.length - 1;
-          const fill = isToday ? color : color + '38'; // 0.22 opacity ≈ 38 hex
+          const fill    = isToday ? color : color + '38';
           return (
             <Rect
               key={i}
@@ -175,7 +201,10 @@ function BarChart({ bars, color }: { bars: number[]; color: string }) {
         {DAY_LABELS.map((d, i) => (
           <Text
             key={i}
-            style={[chartStyles.dayLabel, { color: i === DAY_LABELS.length - 1 ? C.text : C.textFaint }]}
+            style={[
+              chartStyles.dayLabel,
+              { color: i === DAY_LABELS.length - 1 ? C.text : C.textFaint },
+            ]}
           >
             {d}
           </Text>
@@ -200,11 +229,21 @@ const chartStyles = StyleSheet.create({
   },
 });
 
-// ─── Tab panel ────────────────────────────────────────────────────────────────
+// ─── Tab panel — crossfades on switch ─────────────────────────────────────────
 
 function TabPanel({ metric }: { metric: MetricConfig }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
   return (
-    <View style={panelStyles.wrap}>
+    <Animated.View style={[panelStyles.wrap, { opacity: fadeAnim }]}>
       {/* Stats row */}
       <View style={panelStyles.statsRow}>
         {metric.stats.map((s, i) => (
@@ -226,7 +265,7 @@ function TabPanel({ metric }: { metric: MetricConfig }) {
         <BarChart bars={metric.bars} color={metric.color} />
         <Text style={panelStyles.caption}>7-DAY TREND</Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -260,6 +299,7 @@ const panelStyles = StyleSheet.create({
   statValue: {
     fontFamily: fonts.sansBold,
     fontSize: 16,
+    fontVariant: ['tabular-nums'],
   },
   statUnit: {
     fontFamily: fonts.sans,
@@ -288,10 +328,17 @@ const panelStyles = StyleSheet.create({
 
 // ─── Home screen ──────────────────────────────────────────────────────────────
 
+function todayStr(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export default function HomeScreen() {
-  const router = useRouter();
-  const opacity = useRef(new Animated.Value(0)).current;
+  const router   = useRouter();
+  const opacity  = useRef(new Animated.Value(0)).current;
   const [activeTab, setActiveTab] = useState<MetricKey>('readiness');
+  const [todayDone, setTodayDone] = useState(false);
 
   useEffect(() => {
     Animated.timing(opacity, {
@@ -301,10 +348,27 @@ export default function HomeScreen() {
     }).start();
   }, [opacity]);
 
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from('sessions')
+            .select('id')
+            .eq('date', todayStr())
+            .limit(1);
+          console.log('[session] query result:', { data, error });
+          setTodayDone(data !== null && data.length > 0);
+        } catch (_) { /* non-blocking */ }
+      })();
+    }, [])
+  );
+
   const activeMetric = METRICS.find(m => m.key === activeTab)!;
 
   return (
     <View style={s.screen}>
+      <BackgroundWash />
       <SafeAreaView style={s.safe} edges={['top']}>
         <Animated.View style={{ opacity, flex: 1 }}>
           <ScrollView
@@ -357,16 +421,31 @@ export default function HomeScreen() {
             </View>
 
             {/* 5 — Session card */}
-            <View style={s.card}>
-              <View style={s.cardTop}>
-                <Text style={s.cardEyebrow}>TODAY</Text>
-                <TouchableOpacity onPress={() => router.push('/train')}>
-                  <Text style={s.cardCta}>BEGIN →</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={s.cardTitle}>Upper Body</Text>
-              <Text style={s.cardMeta}>Moderate · 40 min · 4 exercises</Text>
-            </View>
+            {(() => {
+              const sched  = todaySchedule();
+              const isRest = sched.type === null;
+              return (
+                <View style={s.card}>
+                  <View style={s.cardTop}>
+                    <Text style={s.cardEyebrow}>TODAY</Text>
+                    {!isRest && (
+                      <TouchableOpacity onPress={() => router.push('/train')} activeOpacity={0.7}>
+                        <Text style={s.cardCta}>BEGIN →</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <View style={s.cardTitleRow}>
+                    <Text style={s.cardTitle}>{isRest ? 'Rest Day' : sched.type}</Text>
+                    {todayDone && <Text style={s.cardTick}>✓</Text>}
+                  </View>
+                  {!isRest && (
+                    <Text style={s.cardMeta}>
+                      {sched.intensity} · {sched.duration} · {sched.exerciseCount} exercises
+                    </Text>
+                  )}
+                </View>
+              );
+            })()}
 
             {/* 6 — Metric tabs */}
             <View style={s.tabsRow}>
@@ -387,8 +466,8 @@ export default function HomeScreen() {
               })}
             </View>
 
-            {/* 7 — Tab panel */}
-            <TabPanel metric={activeMetric} />
+            {/* 7 — Tab panel — key forces remount + crossfade on switch */}
+            <TabPanel key={activeTab} metric={activeMetric} />
           </ScrollView>
         </Animated.View>
       </SafeAreaView>
@@ -515,11 +594,21 @@ const s = StyleSheet.create({
     color: C.gold,
     letterSpacing: 0.07 * 11,
   },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
   cardTitle: {
     fontFamily: fonts.sansBold,
     fontSize: 17,
     color: C.text,
-    marginBottom: 4,
+  },
+  cardTick: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 13,
+    color: C.textMuted,
   },
   cardMeta: {
     fontFamily: fonts.sans,

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,32 +16,52 @@ import { SymbolView } from 'expo-symbols';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, MeridianColors as C } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
+import { BackgroundWash } from '@/components/background-wash';
+import { MOCK_SCHEDULE, todaySchedule } from '@/data/mockSchedule';
 
-// ─── Week strip data ──────────────────────────────────────────────────────────
+// ─── Date helpers ─────────────────────────────────────────────────────────────
 
-type WeekDay = { day: string; label: string; isToday: boolean; completed: boolean };
+function pad(n: number) { return String(n).padStart(2, '0'); }
 
-const WEEK: WeekDay[] = [
-  { day: 'M', label: 'Lower',        isToday: false, completed: false },
-  { day: 'T', label: 'Upper',        isToday: true,  completed: false },
-  { day: 'W', label: 'Rest',         isToday: false, completed: false },
-  { day: 'T', label: 'Lower',        isToday: false, completed: false },
-  { day: 'F', label: 'Upper',        isToday: false, completed: false },
-  { day: 'S', label: 'Conditioning', isToday: false, completed: false },
-  { day: 'S', label: 'Rest',         isToday: false, completed: false },
-];
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
-function WeekStrip() {
+function weekDates(): string[] {
+  const today = new Date();
+  const dow = today.getDay(); // 0=Sun
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+}
+
+// ─── Week strip — derived from single source of truth ─────────────────────────
+
+const WEEK = MOCK_SCHEDULE.map(d => ({ day: d.day[0], label: d.label }));
+
+function WeekStrip({ completedDates, dates }: { completedDates: Set<string>; dates: string[] }) {
+  const today = todayStr();
   return (
     <View style={ws.row}>
-      {WEEK.map((d, i) => (
-        <View key={i} style={ws.cell}>
-          <Text style={[ws.dayLetter, d.isToday && ws.todayText]}>{d.day}</Text>
-          <Text style={[ws.label, d.isToday && ws.todayText]}>{d.label}</Text>
-          {d.isToday && <View style={ws.underline} />}
-          {d.completed && <View style={ws.tick} />}
-        </View>
-      ))}
+      {WEEK.map((d, i) => {
+        const isToday   = dates[i] === today;
+        const completed = completedDates.has(dates[i]);
+        return (
+          <View key={i} style={ws.cell}>
+            <Text style={[ws.dayLetter, isToday && ws.todayText]}>{d.day}</Text>
+            <Text style={[ws.label, isToday && ws.todayText]}>{d.label}</Text>
+            {isToday   && <View style={ws.underline} />}
+            {completed && <View style={ws.tick} />}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -118,14 +140,17 @@ type ExerciseData = {
   notes: string;
 };
 
-// ─── Session meta + data ──────────────────────────────────────────────────────
+// ─── Session meta — derived from schedule ─────────────────────────────────────
+
+const _today = todaySchedule();
 
 const SESSION_META = {
-  type: 'Lower Body',
-  focus: 'Strength',
-  duration: '~55 min',
-  intensity: 'Moderate' as const,
+  type:      _today.type      ?? 'Rest Day',
+  duration:  _today.duration  ?? '—',
+  intensity: (_today.intensity ?? 'Light') as 'Light' | 'Moderate' | 'High',
 };
+
+// ─── Exercise data ─────────────────────────────────────────────────────────────
 
 function makeSet(targetReps: number, targetWeight: number): SetData {
   return {
@@ -135,33 +160,83 @@ function makeSet(targetReps: number, targetWeight: number): SetData {
   };
 }
 
-const INITIAL_EXERCISES: ExerciseData[] = [
+const LOWER_BODY_EXERCISES: ExerciseData[] = [
   {
-    id: '1', name: 'Back Squat', category: 'compound', restSeconds: 150,
+    id: 'l1', name: 'Back Squat', category: 'compound', restSeconds: 150,
     sets: [makeSet(8, 80), makeSet(8, 80), makeSet(8, 80), makeSet(8, 80)],
     notes: '',
   },
   {
-    id: '2', name: 'Romanian Deadlift', category: 'compound', restSeconds: 150,
+    id: 'l2', name: 'Romanian Deadlift', category: 'compound', restSeconds: 150,
     sets: [makeSet(10, 70), makeSet(10, 70), makeSet(10, 70)],
     notes: '',
   },
   {
-    id: '3', name: 'Leg Press', category: 'compound', restSeconds: 150,
+    id: 'l3', name: 'Leg Press', category: 'compound', restSeconds: 150,
     sets: [makeSet(12, 120), makeSet(12, 120), makeSet(12, 120)],
     notes: '',
   },
   {
-    id: '4', name: 'Walking Lunges', category: 'accessory', restSeconds: 75,
+    id: 'l4', name: 'Walking Lunges', category: 'accessory', restSeconds: 75,
     sets: [makeSet(12, 20), makeSet(12, 20), makeSet(12, 20)],
     notes: '',
   },
   {
-    id: '5', name: 'Lying Leg Curl', category: 'accessory', restSeconds: 75,
+    id: 'l5', name: 'Lying Leg Curl', category: 'accessory', restSeconds: 75,
     sets: [makeSet(15, 40), makeSet(15, 40), makeSet(15, 40)],
     notes: '',
   },
 ];
+
+const UPPER_BODY_EXERCISES: ExerciseData[] = [
+  {
+    id: 'u1', name: 'Bench Press', category: 'compound', restSeconds: 150,
+    sets: [makeSet(8, 80), makeSet(8, 80), makeSet(8, 80)],
+    notes: '',
+  },
+  {
+    id: 'u2', name: 'Barbell Row', category: 'compound', restSeconds: 150,
+    sets: [makeSet(8, 70), makeSet(8, 70), makeSet(8, 70)],
+    notes: '',
+  },
+  {
+    id: 'u3', name: 'Overhead Press', category: 'compound', restSeconds: 120,
+    sets: [makeSet(10, 50), makeSet(10, 50), makeSet(10, 50)],
+    notes: '',
+  },
+  {
+    id: 'u4', name: 'Pull-ups', category: 'accessory', restSeconds: 120,
+    sets: [makeSet(8, 0), makeSet(8, 0), makeSet(8, 0)],
+    notes: '',
+  },
+];
+
+const CONDITIONING_EXERCISES: ExerciseData[] = [
+  {
+    id: 'c1', name: 'Kettlebell Swing', category: 'compound', restSeconds: 60,
+    sets: [makeSet(20, 24), makeSet(20, 24), makeSet(20, 24)],
+    notes: '',
+  },
+  {
+    id: 'c2', name: 'Box Jump', category: 'compound', restSeconds: 60,
+    sets: [makeSet(10, 0), makeSet(10, 0), makeSet(10, 0)],
+    notes: '',
+  },
+  {
+    id: 'c3', name: 'Farmer Carry', category: 'accessory', restSeconds: 90,
+    sets: [makeSet(1, 32), makeSet(1, 32), makeSet(1, 32)],
+    notes: '',
+  },
+];
+
+function pickExercises(type: string | null): ExerciseData[] {
+  if (!type) return LOWER_BODY_EXERCISES;
+  if (type.includes('Upper')) return UPPER_BODY_EXERCISES;
+  if (type.includes('Conditioning')) return CONDITIONING_EXERCISES;
+  return LOWER_BODY_EXERCISES;
+}
+
+const INITIAL_EXERCISES = pickExercises(_today.type);
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -172,6 +247,29 @@ export default function SessionScreen() {
   const [exercises, setExercises] = useState<ExerciseData[]>(INITIAL_EXERCISES);
   const [timerDisplay, setTimerDisplay] = useState<TimerDisplay>(null);
   const [phase, setPhase] = useState<SessionPhase>('active');
+  const [completedDates, setCompletedDates] = useState<Set<string>>(new Set());
+  const [dates] = useState<string[]>(weekDates);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from('sessions')
+          .select('date')
+          .in('date', dates);
+        if (data) setCompletedDates(new Set(data.map((r: { date: string }) => r.date)));
+      } catch (_) { /* non-blocking */ }
+    })();
+  }, [dates]);
+
+  // ── CTA animated press ────────────────────────────────────────────────────────
+  const ctaScale   = useRef(new Animated.Value(1)).current;
+  const ctaPressIn  = useCallback(() =>
+    Animated.timing(ctaScale, { toValue: 0.983, duration: 120, useNativeDriver: true }).start(), []);
+  const ctaPressOut = useCallback(() =>
+    Animated.timing(ctaScale, { toValue: 1, duration: 120, useNativeDriver: true }).start(), []);
 
   // ── Imperative timer — ref-based to avoid stale closures ─────────────────────
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -266,12 +364,38 @@ export default function SessionScreen() {
 
   // ── Summary phase ─────────────────────────────────────────────────────────────
 
+  const handleSave = useCallback((rating: number | null, notes: string) => {
+    router.back();
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { console.log('[session] error: no user'); return; }
+        console.log('[session] inserting...');
+        const result = await supabase.from('sessions').insert({
+          user_id:      user.id,
+          date:         todayStr(),
+          workout_type: SESSION_META.type,
+          rating,
+          notes,
+          exercises,
+          completed_at: new Date().toISOString(),
+        });
+        console.log('[session] result:', result);
+        if (!result.error) {
+          setCompletedDates(prev => new Set([...prev, todayStr()]));
+        }
+      } catch (e) {
+        console.log('[session] error:', e);
+      }
+    })();
+  }, [exercises]);
+
   if (phase === 'summary') {
     return (
       <SummaryScreen
         exercises={exercises}
         hasUnderTarget={hasUnderTarget}
-        onSave={() => router.back()}
+        onSave={handleSave}
       />
     );
   }
@@ -280,13 +404,14 @@ export default function SessionScreen() {
 
   return (
     <View style={s.screen}>
+      <BackgroundWash />
       <SafeAreaView edges={['top']} style={s.safeTop}>
         <SessionHeader
           currentExercise={currentExNum}
           totalExercises={exercises.length}
           completedExercises={completedExCount}
         />
-        <WeekStrip />
+        <WeekStrip completedDates={completedDates} dates={dates} />
       </SafeAreaView>
 
       <KeyboardAvoidingView
@@ -310,10 +435,13 @@ export default function SessionScreen() {
           ))}
 
           <Pressable
-            style={({ pressed }) => [s.completeBtn, pressed && s.completeBtnPressed]}
             onPress={() => setPhase('summary')}
+            onPressIn={ctaPressIn}
+            onPressOut={ctaPressOut}
           >
-            <Text style={s.completeBtnText}>Complete Session</Text>
+            <Animated.View style={[s.completeBtn, { transform: [{ scale: ctaScale }] }]}>
+              <Text style={s.completeBtnText}>Complete Session</Text>
+            </Animated.View>
           </Pressable>
         </ScrollView>
 
@@ -363,9 +491,7 @@ function SessionHeader({
           </Pressable>
 
           <View style={h.titleGroup}>
-            <Text style={h.title}>
-              {SESSION_META.type} — {SESSION_META.focus}
-            </Text>
+            <Text style={h.title}>{SESSION_META.type}</Text>
             <Text style={h.subtitle}>
               {SESSION_META.duration}
               {'  ·  '}
@@ -481,10 +607,25 @@ function SetRow({ setNumber, set, onComplete }: SetRowProps) {
   const [repsText, setRepsText]     = useState(() => String(set.actualReps));
   const [weightText, setWeightText] = useState(() => fmtWeight(set.actualWeight));
 
+  // Spring scale for the completion tick
+  const tickScale = useRef(new Animated.Value(0)).current;
+
   // Sync weight display when parent adjusts via Too Easy / Too Hard
   useEffect(() => {
     if (!set.completed) setWeightText(fmtWeight(set.actualWeight));
   }, [set.actualWeight, set.completed]);
+
+  // Pop the tick in with a spring when set is first completed
+  useEffect(() => {
+    if (set.completed) {
+      Animated.spring(tickScale, {
+        toValue: 1,
+        tension: 130,
+        friction: 6,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [set.completed]);
 
   // ── Completed state ───────────────────────────────────────────────────────────
 
@@ -500,11 +641,13 @@ function SetRow({ setNumber, set, onComplete }: SetRowProps) {
           <Text style={sr.completedWeight}>{fmtWeight(set.actualWeight)}</Text>
           <Text style={sr.unit}>kg</Text>
         </View>
-        <SymbolView
-          name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
-          size={20}
-          tintColor={under ? C.red : C.textMuted}
-        />
+        <Animated.View style={{ transform: [{ scale: tickScale }] }}>
+          <SymbolView
+            name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
+            size={20}
+            tintColor={under ? C.red : C.textMuted}
+          />
+        </Animated.View>
       </View>
     );
   }
@@ -577,27 +720,48 @@ function RestTimerPanel({
   onSkip: () => void;
   onAddTime: () => void;
 }) {
-  const insets   = useSafeAreaInsets();
-  const mm       = String(Math.floor(secs / 60)).padStart(2, '0');
-  const ss       = String(secs % 60).padStart(2, '0');
-  const progress = total > 0 ? secs / total : 0;
-  const done     = secs === 0;
+  const insets    = useSafeAreaInsets();
+  const mm        = String(Math.floor(secs / 60)).padStart(2, '0');
+  const ss        = String(secs % 60).padStart(2, '0');
+  const progress  = total > 0 ? secs / total : 0;
+  const done      = secs === 0;
+
+  // Gentle breathing pulse while timer counts down
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const loopRef   = useRef<Animated.CompositeAnimation | null>(null);
+
+  useEffect(() => {
+    if (!done) {
+      loopRef.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 0.8, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1.0, duration: 800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ])
+      );
+      loopRef.current.start();
+    } else {
+      loopRef.current?.stop();
+      loopRef.current = null;
+      Animated.timing(pulseAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    }
+    return () => { loopRef.current?.stop(); loopRef.current = null; };
+  }, [done]);
 
   return (
     <View style={[rt.panel, { paddingBottom: Math.max(insets.bottom, 14) }]}>
       <View style={rt.inner}>
         <View style={rt.topRow}>
           <Text style={rt.label}>REST</Text>
-          <Text style={rt.time}>{mm}:{ss}</Text>
+          <Animated.Text style={[rt.time, { opacity: pulseAnim }]}>{mm}:{ss}</Animated.Text>
           <View style={rt.btns}>
             <Pressable
-              style={({ pressed }) => [rt.quietBtn, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [rt.quietBtn, pressed && { opacity: 0.65, transform: [{ scale: 0.985 }] }]}
               onPress={onAddTime}
             >
               <Text style={rt.quietBtnText}>+30s</Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [rt.quietBtn, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [rt.quietBtn, pressed && { opacity: 0.65, transform: [{ scale: 0.985 }] }]}
               onPress={onSkip}
             >
               <Text style={rt.quietBtnText}>{done ? 'Done' : 'Skip'}</Text>
@@ -625,11 +789,15 @@ function SummaryScreen({
 }: {
   exercises: ExerciseData[];
   hasUnderTarget: boolean;
-  onSave: () => void;
+  onSave: (rating: number | null, notes: string) => void;
 }) {
   const [rating, setRating]           = useState<number | null>(null);
   const [sessionNote, setSessionNote] = useState('');
   const [underNote, setUnderNote]     = useState('');
+
+  const saveScale    = useRef(new Animated.Value(1)).current;
+  const savePressIn  = () => Animated.timing(saveScale, { toValue: 0.983, duration: 120, useNativeDriver: true }).start();
+  const savePressOut = () => Animated.timing(saveScale, { toValue: 1, duration: 120, useNativeDriver: true }).start();
 
   const totalSets     = exercises.reduce((n, ex) => n + ex.sets.length, 0);
   const completedSets = exercises.reduce((n, ex) => n + ex.sets.filter(s => s.completed).length, 0);
@@ -652,7 +820,7 @@ function SummaryScreen({
               tintColor={C.green}
             />
             <Text style={sum.title}>Session Complete</Text>
-            <Text style={sum.titleSub}>{SESSION_META.type} · {SESSION_META.focus}</Text>
+            <Text style={sum.titleSub}>{SESSION_META.type}</Text>
           </View>
 
           {/* Stats */}
@@ -720,10 +888,13 @@ function SummaryScreen({
           </View>
 
           <Pressable
-            style={({ pressed }) => [sum.saveBtn, pressed && sum.saveBtnPressed]}
-            onPress={onSave}
+            onPress={() => onSave(rating, sessionNote)}
+            onPressIn={savePressIn}
+            onPressOut={savePressOut}
           >
-            <Text style={sum.saveBtnText}>Save & Finish</Text>
+            <Animated.View style={[sum.saveBtn, { transform: [{ scale: saveScale }] }]}>
+              <Text style={sum.saveBtnText}>Save & Finish</Text>
+            </Animated.View>
           </Pressable>
         </ScrollView>
       </SafeAreaView>
@@ -911,7 +1082,7 @@ const ec = StyleSheet.create({
     alignItems:      'center',
     gap:             2,
   },
-  btnPressed:  { opacity: 0.65 },
+  btnPressed:  { opacity: 0.65, transform: [{ scale: 0.985 }] },
   adjustLabel: {
     fontFamily: fonts.sansSemiBold,
     fontSize:   13,
@@ -981,13 +1152,14 @@ const sr = StyleSheet.create({
     gap:               4,
   },
   input: {
-    fontFamily: fonts.sansSemiBold,
-    flex:       1,
-    color:      C.text,
-    fontSize:   15,
-    padding:    0,
-    minWidth:   28,
-    textAlign:  'center',
+    fontFamily:  fonts.sansSemiBold,
+    flex:        1,
+    color:       C.text,
+    fontSize:    15,
+    padding:     0,
+    minWidth:    28,
+    textAlign:   'center',
+    fontVariant: ['tabular-nums'],
   },
   unit: {
     fontFamily: fonts.sans,
@@ -1011,14 +1183,16 @@ const sr = StyleSheet.create({
     gap:           4,
   },
   completedReps: {
-    fontFamily: fonts.sansSemiBold,
-    color:      C.text,
-    fontSize:   15,
+    fontFamily:  fonts.sansSemiBold,
+    color:       C.text,
+    fontSize:    15,
+    fontVariant: ['tabular-nums'],
   },
   completedWeight: {
-    fontFamily: fonts.sansMedium,
-    color:      C.textMuted,
-    fontSize:   14,
+    fontFamily:  fonts.sansMedium,
+    color:       C.textMuted,
+    fontSize:    14,
+    fontVariant: ['tabular-nums'],
   },
   dot: {
     width:            3,
@@ -1056,6 +1230,7 @@ const rt = StyleSheet.create({
     fontFamily:    fonts.sansBold,
     flex:          1,
     color:         C.text,
+    fontVariant:   ['tabular-nums'],
     fontSize:      28,
     letterSpacing: -1,
   },
