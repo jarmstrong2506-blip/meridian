@@ -15,7 +15,16 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { fonts, MeridianColors as C } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { todaySchedule } from '@/data/mockSchedule';
+import { GoalKey, NoGoMovement } from '@/data/testWeek';
+import { getCurrentTestDay, resolveTestWeekPlan } from '@/lib/testWeek';
 import { BackgroundWash } from '@/components/background-wash';
+
+type TestWeekProfileMin = {
+  goal: string;
+  test_week_status: string | null;
+  test_week_started_at: string | null;
+  test_week_no_gos: string[] | null;
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -337,8 +346,9 @@ function todayStr(): string {
 export default function HomeScreen() {
   const router   = useRouter();
   const opacity  = useRef(new Animated.Value(0)).current;
-  const [activeTab, setActiveTab] = useState<MetricKey>('readiness');
-  const [todayDone, setTodayDone] = useState(false);
+  const [activeTab, setActiveTab]           = useState<MetricKey>('readiness');
+  const [todayDone, setTodayDone]           = useState(false);
+  const [twProfile, setTwProfile]           = useState<TestWeekProfileMin | null>(null);
 
   useEffect(() => {
     Animated.timing(opacity, {
@@ -352,13 +362,21 @@ export default function HomeScreen() {
     useCallback(() => {
       (async () => {
         try {
-          const { data, error } = await supabase
-            .from('sessions')
-            .select('id')
-            .eq('date', todayStr())
-            .limit(1);
-          console.log('[session] query result:', { data, error });
-          setTodayDone(data !== null && data.length > 0);
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+
+          const [sessRes, profRes] = await Promise.all([
+            supabase.from('sessions').select('id').eq('date', todayStr()).limit(1),
+            supabase
+              .from('profiles')
+              .select('goal, test_week_status, test_week_started_at, test_week_no_gos')
+              .eq('id', user.id)
+              .single(),
+          ]);
+
+          console.log('[home] session query:', sessRes.error ?? 'ok');
+          setTodayDone(sessRes.data !== null && sessRes.data.length > 0);
+          setTwProfile(profRes.data as TestWeekProfileMin | null);
         } catch (_) { /* non-blocking */ }
       })();
     }, [])
@@ -422,6 +440,61 @@ export default function HomeScreen() {
 
             {/* 5 — Session card */}
             {(() => {
+              // ── Test Week: complete ───────────────────────────────────────
+              if (twProfile?.test_week_status === 'complete') {
+                return (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={s.card}
+                    onPress={() => router.push('/test-week-summary')}
+                  >
+                    <Text style={s.cardEyebrow}>TEST WEEK COMPLETE</Text>
+                    <Text style={s.cardTitle}>View your Test Week Summary →</Text>
+                  </TouchableOpacity>
+                );
+              }
+
+              // ── Test Week: in progress ────────────────────────────────────
+              if (twProfile?.test_week_status === 'in_progress' && twProfile.test_week_started_at) {
+                const goalMap: Record<string, GoalKey> = {
+                  'Build muscle': 'build_muscle',
+                  'Lose fat': 'lose_fat',
+                  'General fitness': 'general_fitness',
+                };
+                const gk: GoalKey = goalMap[twProfile.goal] ?? 'general_fitness';
+                const noGos = (twProfile.test_week_no_gos ?? ['none']) as NoGoMovement[];
+                const plan  = resolveTestWeekPlan(gk, noGos);
+                const dayIdx = getCurrentTestDay(plan, twProfile.test_week_started_at, todayStr());
+                const testDay = dayIdx !== null
+                  ? plan.days.find((d) => d.dayNumber === dayIdx) ?? null
+                  : null;
+
+                if (!testDay) {
+                  return (
+                    <View style={s.card}>
+                      <Text style={s.cardEyebrowTw}>TODAY · TEST WEEK</Text>
+                      <Text style={s.cardTitle}>Rest Day</Text>
+                      <Text style={s.cardMeta}>Recover. Next test tomorrow.</Text>
+                    </View>
+                  );
+                }
+
+                const metaLine = testDay.tests.map((t) => t.primaryExercise).join(' · ');
+                return (
+                  <View style={s.card}>
+                    <View style={s.cardTop}>
+                      <Text style={s.cardEyebrowTw}>TODAY · TEST WEEK</Text>
+                      <TouchableOpacity onPress={() => router.push('/train')} activeOpacity={0.7}>
+                        <Text style={s.cardCta}>BEGIN →</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={s.cardTitle}>{testDay.label}</Text>
+                    <Text style={s.cardMeta}>{metaLine}</Text>
+                  </View>
+                );
+              }
+
+              // ── Normal session card ───────────────────────────────────────
               const sched  = todaySchedule();
               const isRest = sched.type === null;
               return (
@@ -586,6 +659,12 @@ const s = StyleSheet.create({
     fontFamily: fonts.sansSemiBold,
     fontSize: 10,
     color: C.textMuted,
+    letterSpacing: 0.1 * 10,
+  },
+  cardEyebrowTw: {
+    fontFamily:    fonts.sansSemiBold,
+    fontSize:      10,
+    color:         C.gold,
     letterSpacing: 0.1 * 10,
   },
   cardCta: {

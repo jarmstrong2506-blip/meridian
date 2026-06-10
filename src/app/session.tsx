@@ -19,6 +19,8 @@ import { fonts, MeridianColors as C } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { BackgroundWash } from '@/components/background-wash';
 import { MOCK_SCHEDULE, todaySchedule } from '@/data/mockSchedule';
+import TestWeekSession from '@/components/test-week-session';
+import { fetchTestWeekProfile, TestWeekProfileData } from '@/lib/profile';
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -249,6 +251,8 @@ export default function SessionScreen() {
   const [phase, setPhase] = useState<SessionPhase>('active');
   const [completedDates, setCompletedDates] = useState<Set<string>>(new Set());
   const [dates] = useState<string[]>(weekDates);
+  const [twProfile, setTwProfile] = useState<TestWeekProfileData | null>(null);
+  const [twLoaded,  setTwLoaded]  = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -263,6 +267,10 @@ export default function SessionScreen() {
       } catch (_) { /* non-blocking */ }
     })();
   }, [dates]);
+
+  useEffect(() => {
+    fetchTestWeekProfile().then(p => { setTwProfile(p); setTwLoaded(true); });
+  }, []);
 
   // ── CTA animated press ────────────────────────────────────────────────────────
   const ctaScale   = useRef(new Animated.Value(1)).current;
@@ -389,6 +397,9 @@ export default function SessionScreen() {
       }
     })();
   }, [exercises]);
+
+  if (!twLoaded) return <View style={{ flex: 1, backgroundColor: C.bg }} />;
+  if (twProfile?.test_week_status === 'in_progress') return <TestWeekSession profile={twProfile} />;
 
   if (phase === 'summary') {
     return (

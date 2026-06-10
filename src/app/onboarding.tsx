@@ -526,7 +526,7 @@ export default function OnboardingScreen() {
     } catch (e) {
       console.log('[profile] error:', e);
     }
-    router.replace('/');
+    router.replace('/test-week-setup');
   }, [profile]);
 
   const autoAdvance = useCallback(
