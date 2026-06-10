@@ -29,11 +29,11 @@ type UserProfile = {
   training_days: string[];
   health_notes: string;
   wearable: 'Apple Watch' | 'Another tracker' | 'None — manual check-ins';
-  units: { height: 'cm' | 'ft'; weight: 'kg' | 'lb' };
+  units: { height: 'cm' | 'ft'; weight: 'kg' | 'lb'; distance: 'km' | 'miles' };
   onboarded_at: string;
 };
 
-const TOTAL_STEPS = 12;
+const TOTAL_STEPS = 13;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 // ─── Conversion helpers ───────────────────────────────────────────────────────
@@ -461,6 +461,7 @@ export default function OnboardingScreen() {
   const [trainingDays, setTrainingDays] = useState<string[]>([]);
   const [healthNotes, setHealthNotes] = useState('');
   const [wearable, setWearable] = useState<string | null>(null);
+  const [distanceUnit, setDistanceUnit] = useState<'km' | 'miles'>('km');
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
@@ -701,15 +702,38 @@ export default function OnboardingScreen() {
                 advance({
                   height_cm: cm,
                   weight_kg: kg,
-                  units: { height: heightUnit, weight: weightUnit },
+                  units: { height: heightUnit, weight: weightUnit, distance: distanceUnit },
                 });
               }}
             />
           </>
         );
 
-      // 4 — Goal
+      // 4 — Distance unit
       case 4:
+        return (
+          <>
+            <CoachQuestion primary="How do you measure distance?" />
+            <View style={s.gap40} />
+            <SingleSelectChip
+              options={['Kilometres', 'Miles']}
+              selected={distanceUnit === 'km' ? 'Kilometres' : 'Miles'}
+              onSelect={(v) => {
+                const du = v === 'Miles' ? 'miles' as const : 'km' as const;
+                setDistanceUnit(du);
+                setTimeout(
+                  () => advance({ units: { height: heightUnit, weight: weightUnit, distance: du } }),
+                  250,
+                );
+              }}
+            />
+            <View style={s.spacer} />
+            <BottomActions continueVisible={false} onContinue={() => {}} />
+          </>
+        );
+
+      // 5 — Goal
+      case 5:
         return (
           <>
             <CoachQuestion primary="What are we working towards?" />
@@ -724,8 +748,8 @@ export default function OnboardingScreen() {
           </>
         );
 
-      // 5 — Experience
-      case 5:
+      // 6 — Experience
+      case 6:
         return (
           <>
             <CoachQuestion primary="How much training have you done?" />
@@ -742,8 +766,8 @@ export default function OnboardingScreen() {
           </>
         );
 
-      // 6 — Equipment
-      case 6:
+      // 7 — Equipment
+      case 7:
         return (
           <>
             <CoachQuestion primary="What's your setup?" />
@@ -760,8 +784,8 @@ export default function OnboardingScreen() {
           </>
         );
 
-      // 7 — Training days
-      case 7:
+      // 8 — Training days
+      case 8:
         return (
           <>
             <CoachQuestion primary="Which days can you train?" />
@@ -775,8 +799,8 @@ export default function OnboardingScreen() {
           </>
         );
 
-      // 8 — Health notes
-      case 8:
+      // 9 — Health notes
+      case 9:
         return (
           <>
             <CoachQuestion primary="Anything I should know? Injuries, conditions — anything that might affect training." />
@@ -790,15 +814,15 @@ export default function OnboardingScreen() {
             <View style={s.spacer} />
             <BottomActions
               skipVisible
-              onSkip={() => advance({ health_notes: '' }, 10)}
+              onSkip={() => advance({ health_notes: '' }, 11)}
               continueVisible={healthNotes.trim().length > 0}
               onContinue={() => advance({ health_notes: healthNotes.trim() })}
             />
           </>
         );
 
-      // 9 — Injury acknowledgement (only reached if health_notes has content)
-      case 9:
+      // 10 — Injury acknowledgement (only reached if health_notes has content)
+      case 10:
         return (
           <>
             <View style={s.finalPad}>
@@ -809,8 +833,8 @@ export default function OnboardingScreen() {
           </>
         );
 
-      // 10 — Wearable
-      case 10:
+      // 11 — Wearable
+      case 11:
         return (
           <>
             <CoachQuestion primary="Do you wear a fitness tracker?" />
@@ -827,8 +851,8 @@ export default function OnboardingScreen() {
           </>
         );
 
-      // 11 — Test week intro
-      case 11:
+      // 12 — Test week intro
+      case 12:
         return (
           <>
             <View style={s.finalPad}>
